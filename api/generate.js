@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS 헤더 설정 (기존 유지)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -9,51 +10,56 @@ export default async function handler(req, res) {
   const { keywords, level } = req.body;
   if (!keywords?.trim()) return res.status(400).json({ error: "키워드를 입력해주세요." });
 
+  // Vercel 환경 변수에서 구글 API 키를 가져옵니다.
+  const API_KEY = process.env.GOOGLE_API_KEY;
+  const MODEL_NAME = "gemini-2.0-flash"; // 2026년 기준 가장 빠르고 효율적인 모델
+
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: "You are an IT education curriculum expert in Korea. Output ONLY a valid JSON array of strings. No markdown, no code blocks, no explanation. Just raw JSON.",
-        messages: [{
-          role: "user",
-          content: `KT DS 컨소시엄 수요조사용 교육 과정명 5개를 생성해주세요.
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `당신은 대한민국 IT 교육 과정 기획 전문가입니다. 
+                     KT DS 컨소시엄 수요조사용 교육 과정명 5개를 생성해주세요.
 
-키워드: ${keywords}
-수준: ${level}
-시도: ${Math.floor(Math.random() * 10000)}
+                     키워드: ${keywords}
+                     수준: ${level}
 
-조건:
-- 실무에서 바로 쓸 수 있을 것 같은 매력적인 과정명
-- 수준(${level})이 과정명에 자연스럽게 반영될 것
-- 너무 길지 않게 (20자 내외)
-- 다양한 각도로 5개 제안
-- 시간(H) 표기 절대 포함하지 말 것
+                     조건:
+                     - 실무에서 바로 쓸 수 있을 것 같은 매력적인 과정명
+                     - 수준(${level})이 과정명에 자연스럽게 반영될 것
+                     - 너무 길지 않게 (20자 내외)
+                     - 다양한 각도로 5개 제안
+                     - 시간(H) 표기 절대 포함하지 말 것
 
-아래 JSON 배열 형식으로만 응답하세요:
-["과정명1","과정명2","과정명3","과정명4","과정명5"]`
-        }],
-      }),
-    });
+                     응답 형식:
+                     반드시 다른 설명 없이 아래 JSON 배열 형식으로만 응답하세요:
+                     ["과정명1","과정명2","과정명3","과정명4","과정명5"]`
+            }]
+          }],
+          generationConfig: {
+            responseMimeType: "application/json" // 응답을 확실하게 JSON으로 고정합니다.
+          }
+        }),
+      }
+    );
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || "Claude API 오류");
+    if (!response.ok) throw new Error(data.error?.message || "Gemini API 오류");
 
-    const text = (data.content?.[0]?.text || "").trim().replace(/```json|```/g, "").trim();
-    let titles;
-    try { titles = JSON.parse(text); }
-    catch { const m = text.match(/\[[\s\S]*\]/); titles = m ? JSON.parse(m[0]) : null; }
+    // 제미나이 응답에서 텍스트 추출 및 파싱
+    const text = data.candidates[0].content.parts[0].text;
+    const titles = JSON.parse(text);
 
-    if (!Array.isArray(titles) || titles.length === 0) throw new Error("파싱 실패");
+    if (!Array.isArray(titles) || titles.length === 0) throw new Error("데이터 형식이 올바르지 않습니다.");
+    
     res.status(200).json({ titles });
 
   } catch (e) {
-    res.status(500).json({ error: e.message || "서버 오류" });
+    res.status(500).json({ error: e.message || "서버 오류가 발생했습니다." });
   }
 }
