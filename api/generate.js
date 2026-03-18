@@ -12,7 +12,9 @@ export default async function handler(req, res) {
 
   // Vercel 환경 변수에서 구글 API 키를 가져옵니다.
   const API_KEY = process.env.GOOGLE_API_KEY;
-  const MODEL_NAME = "gemini-2.0-flash"; // 2026년 기준 가장 빠르고 효율적인 모델
+  
+  // ✅ 할당량 오류를 피하기 위해 가장 안정적인 무료 모델로 변경했습니다.
+  const MODEL_NAME = "gemini-1.5-flash"; 
 
   try {
     const response = await fetch(
@@ -42,7 +44,7 @@ export default async function handler(req, res) {
             }]
           }],
           generationConfig: {
-            responseMimeType: "application/json" // 응답을 확실하게 JSON으로 고정합니다.
+            responseMimeType: "application/json"
           }
         }),
       }
